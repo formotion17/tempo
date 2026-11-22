@@ -8,6 +8,7 @@ import SwiftUI
 struct ShiftTypesView: View {
     @Environment(ShiftTypeStore.self) private var shiftTypeStore
     @Environment(ShiftStore.self) private var shiftStore
+    @Environment(WorkCalendarStore.self) private var calendarStore
 
     let onBack: () -> Void
 
@@ -19,6 +20,13 @@ struct ShiftTypesView: View {
             header
 
             ScrollView {
+                Text("Biblioteca de turnos de la app. En cada calendario eliges cuáles usar en la paleta.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+
                 LazyVStack(spacing: 12) {
                     ForEach(shiftTypeStore.shiftTypes) { shiftType in
                         shiftTypeCard(shiftType)
@@ -117,7 +125,8 @@ struct ShiftTypesView: View {
                     .accessibilityLabel("Editar")
 
                     Button(role: .destructive) {
-                        shiftStore.removeShifts(shiftTypeID: shiftType.id)
+                        shiftStore.removeAllShifts(shiftTypeID: shiftType.id)
+                        calendarStore.removeShiftTypeFromAllCalendars(shiftTypeID: shiftType.id)
                         shiftTypeStore.deleteShiftType(id: shiftType.id)
                     } label: {
                         Image(systemName: "trash")
@@ -145,4 +154,5 @@ struct ShiftTypesView: View {
 #Preview {
     ShiftTypesView(onBack: {})
         .environment(ShiftTypeStore())
+        .environment(WorkCalendarStore())
 }

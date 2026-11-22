@@ -15,14 +15,28 @@ struct ShiftEntry: Identifiable, Hashable, Codable {
     }
 }
 
+typealias DayAssignments = [String: [ShiftEntry]]
+
 @Observable
 final class ShiftStore {
-    private var storage: [String: [ShiftEntry]] = [:]
+    private var storage: [UUID: DayAssignments] = [:]
 
     init() {
-        if let saved = AppPersistence.loadShiftAssignments() {
-            storage = saved
+        if let scoped = AppPersistence.loadShiftAssignmentsByCalendar() {
+            storage = scoped.reduce(into: [UUID: DayAssignments]()) { result, pair in
+                if let id = UUID(uuidString: pair.key) {
+                    result[id] = pair.value
+                }
+            }
+        } else if let legacy = AppPersistence.loadShiftAssignments(),
+                  let selected = AppPersistence.loadWorkCalendarState()?.selectedCalendarID {
+            storage[selected] = legacy
+            persist()
         }
+    }
+
+    private func bucket(for calendarID: UUID) -> DayAssignments {
+        storage[calendarID] ?? [:]
     }
 
     func dayKey(for date: Date, calendar: Calendar = .current) -> String {
@@ -33,44 +47,78 @@ final class ShiftStore {
         return String(format: "%04d-%02d-%02d", year, month, day)
     }
 
-    func shifts(for date: Date, calendar: Calendar = .current) -> [ShiftEntry] {
-        storage[dayKey(for: date, calendar: calendar)] ?? []
+    func shifts(for date: Date, calendarID: UUID, calendar: Calendar = .current) -> [ShiftEntry] {
+        let key = dayKey(for: date, calendar: calendar)
+        return bucket(for: calendarID)[key] ?? []
     }
 
     static let maxShiftsPerDay = 4
 
-    func addShift(shiftTypeID: UUID, on date: Date, calendar: Calendar = .current) {
-        let key = dayKey(for: date, calendar: calendar)
-        var entries = storage[key] ?? []
+    func addShift(shiftTypeID: UUID, on date: Date, calendarID: UUID, calendar: Calendar = .current) {
+        let day = dayKey(for: date, calendar: calendar)
+        var days = bucket(for: calendarID)
+        var entries = days[day] ?? []
         guard !entries.contains(where: { $0.shiftTypeID == shiftTypeID }) else { return }
         guard entries.count < Self.maxShiftsPerDay else { return }
         entries.append(ShiftEntry(shiftTypeID: shiftTypeID))
-        storage[key] = entries
+        days[day] = entries
+        storage[calendarID] = days
         persist()
     }
 
-    func clearDay(on date: Date, calendar: Calendar = .current) {
-        let key = dayKey(for: date, calendar: calendar)
-        storage[key] = []
+    func clearDay(on date: Date, calendarID: UUID, calendar: Calendar = .current) {
+        let day = dayKey(for: date, calendar: calendar)
+        var days = bucket(for: calendarID)
+        days[day] = []
+        storage[calendarID] = days
         persist()
     }
 
-    func removeShift(id: UUID, on date: Date, calendar: Calendar = .current) {
-        let key = dayKey(for: date, calendar: calendar)
-        storage[key] = storage[key]?.filter { $0.id != id }
+    func removeShift(shiftTypeID: UUID, on date: Date, calendarID: UUID, calendar: Calendar = .current) {
+        let day = dayKey(for: date, calendar: calendar)
+        var days = bucket(for: calendarID)
+        days[day] = days[day]?.filter { $0.shiftTypeID != shiftTypeID }
+        storage[calendarID] = days
         persist()
     }
 
-    func removeShift(shiftTypeID: UUID, on date: Date, calendar: Calendar = .current) {
-        let key = dayKey(for: date, calendar: calendar)
-        storage[key] = storage[key]?.filter { $0.shiftTypeID != shiftTypeID }
-        persist()
-    }
-
-    func removeShifts(shiftTypeID: UUID) {
-        for key in storage.keys {
-            storage[key] = storage[key]?.filter { $0.shiftTypeID != shiftTypeID }
+    func removeAllShifts(shiftTypeID: UUID) {
+        for calendarID in storage.keys {
+            var days = storage[calendarID] ?? [:]
+            for day in days.keys {
+                days[day] = days[day]?.filter { $0.shiftTypeID != shiftTypeID }
+            }
+            storage[calendarID] = days
         }
+        persist()
+    }
+
+    func assignments(for calendarID: UUID) -> DayAssignments {
+        bucket(for: calendarID)
+    }
+
+    func setAssignments(_ assignments: DayAssignments, calendarID: UUID) {
+        storage[calendarID] = assignments
+        persist()
+    }
+
+    func mergeAssignments(_ imported: DayAssignments, calendarID: UUID) {
+        var days = bucket(for: calendarID)
+        for (dayKey, entries) in imported {
+            var merged = days[dayKey] ?? []
+            for entry in entries {
+                guard !merged.contains(where: { $0.shiftTypeID == entry.shiftTypeID }) else { continue }
+                guard merged.count < Self.maxShiftsPerDay else { continue }
+                merged.append(ShiftEntry(shiftTypeID: entry.shiftTypeID))
+            }
+            days[dayKey] = merged
+        }
+        storage[calendarID] = days
+        persist()
+    }
+
+    func removeAssignments(forCalendar calendarID: UUID) {
+        storage.removeValue(forKey: calendarID)
         persist()
     }
 
@@ -79,6 +127,9 @@ final class ShiftStore {
     }
 
     private func persist() {
-        AppPersistence.saveShiftAssignments(storage)
+        let encoded = storage.reduce(into: [String: DayAssignments]()) { result, pair in
+            result[pair.key.uuidString] = pair.value
+        }
+        AppPersistence.saveShiftAssignmentsByCalendar(encoded)
     }
 }

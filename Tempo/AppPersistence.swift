@@ -60,6 +60,14 @@ enum AppPersistence {
         save(assignments, fileName: assignmentsFileName)
     }
 
+    static func loadShiftAssignmentsByCalendar() -> [String: [String: [ShiftEntry]]]? {
+        load([String: [String: [ShiftEntry]]].self, fileName: assignmentsFileName)
+    }
+
+    static func saveShiftAssignmentsByCalendar(_ assignments: [String: [String: [ShiftEntry]]]) {
+        save(assignments, fileName: assignmentsFileName)
+    }
+
     private static func load<T: Decodable>(_ type: T.Type, fileName: String) -> T? {
         let url = fileURL(fileName)
         guard let data = try? Data(contentsOf: url) else { return nil }

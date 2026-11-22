@@ -25,7 +25,7 @@ struct CalendarPickerSheet: View {
                                     .strokeBorder(.black.opacity(0.12), lineWidth: 0.5)
                             }
 
-                        Text(calendar.name)
+                        Text(calendar.listDisplayName)
                             .foregroundStyle(.primary)
 
                         Spacer()

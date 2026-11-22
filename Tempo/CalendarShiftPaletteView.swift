@@ -7,9 +7,14 @@ import SwiftUI
 
 struct CalendarShiftPaletteView: View {
     @Environment(ShiftTypeStore.self) private var shiftTypeStore
+    @Environment(WorkCalendarStore.self) private var calendarStore
 
     @Binding var selectedAction: CalendarDayAction
     var onEditShiftType: (ShiftTypeDefinition) -> Void
+
+    private var paletteShiftTypes: [ShiftTypeDefinition] {
+        shiftTypeStore.shiftTypes(linkedTo: calendarStore.selectedCalendar.shiftTypeIDs)
+    }
 
     private let toolHeight: CGFloat = 80
     private let shiftCardWidth: CGFloat = 56
@@ -32,7 +37,7 @@ struct CalendarShiftPaletteView: View {
                 clearDayCard
 
                 LazyHGrid(rows: shiftGridRows, alignment: .center, spacing: 8) {
-                    ForEach(shiftTypeStore.shiftTypes) { shiftType in
+                    ForEach(paletteShiftTypes) { shiftType in
                         shiftTypeCard(shiftType)
                     }
                 }
@@ -112,4 +117,5 @@ struct CalendarShiftPaletteView: View {
     @Previewable @State var action: CalendarDayAction = .none
     CalendarShiftPaletteView(selectedAction: $action, onEditShiftType: { _ in })
         .environment(ShiftTypeStore())
+        .environment(WorkCalendarStore())
 }

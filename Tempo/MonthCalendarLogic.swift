@@ -91,4 +91,61 @@ enum MonthCalendarLogic {
         let start = calendar.firstWeekday - 1
         return (0..<7).map { symbols[(start + $0) % 7] }
     }
+
+    /// Días del mes alineados en semanas (celdas vacías al inicio).
+    static func monthDaySlots(for month: Date, calendar: Calendar = .current) -> [[Date?]] {
+        guard let monthStart = monthStart(for: month, calendar: calendar),
+              let dayRange = calendar.range(of: .day, in: .month, for: monthStart)
+        else { return [] }
+
+        var days: [Date?] = []
+        let weekdayOfFirst = calendar.component(.weekday, from: monthStart)
+        let leadingCount = (weekdayOfFirst - calendar.firstWeekday + 7) % 7
+        days.append(contentsOf: Array(repeating: nil, count: leadingCount))
+
+        for day in dayRange {
+            if let date = calendar.date(byAdding: .day, value: day - 1, to: monthStart) {
+                days.append(date)
+            }
+        }
+
+        while days.count % 7 != 0 {
+            days.append(nil)
+        }
+
+        return stride(from: 0, to: days.count, by: 7).map { index in
+            Array(days[index..<min(index + 7, days.count)])
+        }
+    }
+
+    static func months(inYear year: Int, calendar: Calendar = .current) -> [Date] {
+        (1...12).compactMap { month in
+            calendar.date(from: DateComponents(year: year, month: month, day: 1))
+        }
+    }
+
+    static func currentYear(calendar: Calendar = .current) -> Int {
+        calendar.component(.year, from: Date())
+    }
+
+    /// Siempre seis filas para que todos los meses tengan la misma altura en la vista anual.
+    static func monthDaySlotsFixedRows(
+        for month: Date,
+        rows: Int = 6,
+        calendar: Calendar = .current
+    ) -> [[Date?]] {
+        var slots = monthDaySlots(for: month, calendar: calendar)
+        while slots.count < rows {
+            slots.append(Array(repeating: nil, count: 7))
+        }
+        return Array(slots.prefix(rows))
+    }
+
+    static func spanishWeekdayInitials(calendar: Calendar = .current) -> [String] {
+        let mondayFirst = ["L", "M", "X", "J", "V", "S", "D"]
+        if calendar.firstWeekday == 1 {
+            return ["D", "L", "M", "X", "J", "V", "S"]
+        }
+        return mondayFirst
+    }
 }

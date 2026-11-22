@@ -20,6 +20,7 @@ struct TempoApp: App {
                 .environment(shiftStore)
                 .environment(workCalendarStore)
                 .environment(shiftTypeStore)
+                .preferredColorScheme(.light)
                 .onChange(of: scenePhase) { _, newPhase in
                     guard newPhase == .background || newPhase == .inactive else { return }
                     shiftStore.persistAssignments()

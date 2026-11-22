@@ -12,10 +12,14 @@ struct CalendarDayCellView: View {
     let date: Date
     let isInDisplayedMonth: Bool
     let cellHeight: CGFloat
+    let workCalendarID: UUID
+    var assignmentsLocked: Bool = false
     let selectedAction: CalendarDayAction
+    var onZoomRequest: (() -> Void)? = nil
 
     @Environment(ShiftStore.self) private var shiftStore
     @Environment(ShiftTypeStore.self) private var shiftTypeStore
+    @Environment(WorkCalendarStore.self) private var calendarStore
 
     @State private var flipAngle: Double = 0
     @State private var isAnimatingFlip = false
@@ -23,7 +27,7 @@ struct CalendarDayCellView: View {
     private var calendar: Calendar { Calendar.current }
 
     private var shifts: [ShiftEntry] {
-        shiftStore.shifts(for: date, calendar: calendar)
+        shiftStore.shifts(for: date, calendarID: workCalendarID, calendar: calendar)
     }
 
     private var shiftSegments: [(color: Color, initials: String)] {
@@ -31,6 +35,19 @@ struct CalendarDayCellView: View {
             guard let type = shiftTypeStore.shiftType(id: entry.shiftTypeID) else { return nil }
             return (type.color, type.displayInitials)
         }
+    }
+
+    private var overlayBubbles: [(color: Color, label: String)] {
+        guard let host = calendarStore.calendar(id: workCalendarID), !host.isImported else { return [] }
+        var items: [(Color, String)] = []
+        for overlay in host.overlays {
+            let sourceShifts = shiftStore.shifts(for: date, calendarID: overlay.sourceCalendarID, calendar: calendar)
+            for entry in sourceShifts where overlay.includes(shiftTypeID: entry.shiftTypeID) {
+                let appearance = overlay.bubbleAppearance(for: entry.shiftTypeID, shiftTypeStore: shiftTypeStore)
+                items.append(appearance)
+            }
+        }
+        return items
     }
 
     private var isToday: Bool {
@@ -78,17 +95,29 @@ struct CalendarDayCellView: View {
         .opacity(isAdjacentMonthDay ? 0.34 : 1)
         .saturation(isAdjacentMonthDay ? 0.35 : 1)
         .blur(radius: isAdjacentMonthDay ? 0.35 : 0)
-        .allowsHitTesting(isInDisplayedMonth && !isAnimatingFlip)
+        .allowsHitTesting(isInDisplayedMonth && !isAnimatingFlip && !assignmentsLocked)
         .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .onTapGesture {
             applySelectedAction()
         }
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+                guard isInDisplayedMonth, !isAnimatingFlip, let onZoomRequest else { return }
+                onZoomRequest()
+            }
+        )
     }
 
     private var cardContent: some View {
-        VStack(spacing: 0) {
-            dayNumberLabel
-            shiftArea
+        ZStack(alignment: .bottom) {
+            VStack(spacing: 0) {
+                dayNumberLabel
+                shiftArea
+            }
+
+            if !overlayBubbles.isEmpty {
+                overlayBubblesRow
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background {
@@ -148,6 +177,32 @@ struct CalendarDayCellView: View {
         #endif
     }
 
+    private var overlayBubblesRow: some View {
+        HStack(spacing: 3) {
+            ForEach(Array(overlayBubbles.enumerated()), id: \.offset) { _, bubble in
+                Text(bubble.label)
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(bubbleForeground(on: bubble.color))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background {
+                        Capsule(style: .continuous)
+                            .fill(bubble.color)
+                            .shadow(color: .black.opacity(0.18), radius: 1.5, y: 1)
+                    }
+            }
+        }
+        .padding(.bottom, 3)
+        .padding(.horizontal, 3)
+        .allowsHitTesting(false)
+    }
+
+    private func bubbleForeground(on color: Color) -> Color {
+        initialsColor(for: color)
+    }
+
     private func shiftBand(_ segment: (color: Color, initials: String)) -> some View {
         ZStack {
             segment.color
@@ -191,16 +246,16 @@ struct CalendarDayCellView: View {
         case .clearDay:
             guard !shifts.isEmpty else { return }
             performFlipThenApply {
-                shiftStore.clearDay(on: date, calendar: calendar)
+                shiftStore.clearDay(on: date, calendarID: workCalendarID, calendar: calendar)
             }
         case .applyShift(let shiftTypeID):
             if shifts.contains(where: { $0.shiftTypeID == shiftTypeID }) {
                 performFlipThenApply {
-                    shiftStore.removeShift(shiftTypeID: shiftTypeID, on: date, calendar: calendar)
+                    shiftStore.removeShift(shiftTypeID: shiftTypeID, on: date, calendarID: workCalendarID, calendar: calendar)
                 }
             } else if shifts.count < ShiftStore.maxShiftsPerDay {
                 performFlipThenApply {
-                    shiftStore.addShift(shiftTypeID: shiftTypeID, on: date, calendar: calendar)
+                    shiftStore.addShift(shiftTypeID: shiftTypeID, on: date, calendarID: workCalendarID, calendar: calendar)
                 }
             }
         }
@@ -214,10 +269,12 @@ struct CalendarDayCellView: View {
         date: .now,
         isInDisplayedMonth: true,
         cellHeight: 88,
+        workCalendarID: UUID(),
         selectedAction: .none
     )
     .padding(8)
     .background(Color(.systemGroupedBackground))
     .environment(store)
     .environment(typeStore)
+    .environment(WorkCalendarStore())
 }

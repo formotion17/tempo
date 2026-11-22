@@ -108,6 +108,10 @@ final class ShiftTypeStore {
         shiftTypes.first { $0.id == id }
     }
 
+    func shiftTypes(linkedTo ids: [UUID]) -> [ShiftTypeDefinition] {
+        ids.compactMap { id in shiftTypes.first { $0.id == id } }
+    }
+
     func persistShiftTypes() {
         persist()
     }

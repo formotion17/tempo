@@ -1,0 +1,21 @@
+//
+//  ActivityShareSheet.swift
+//  Tempo
+//
+
+import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
+
+#if canImport(UIKit)
+struct ActivityShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+#endif

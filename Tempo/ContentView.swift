@@ -15,13 +15,22 @@ private enum RootScreen {
 struct ContentView: View {
     @Environment(WorkCalendarStore.self) private var calendarStore
     @Environment(ShiftTypeStore.self) private var shiftTypeStore
+    @Environment(ShiftStore.self) private var shiftStore
 
     @State private var rootScreen: RootScreen = .calendar
     @State private var showsCalendarPicker = false
     @State private var showsOptionsMenu = false
+    @State private var showsShareMenu = false
     @State private var selectedDayAction: CalendarDayAction = .none
+    @State private var calendarSurfaceMode: CalendarSurfaceMode = .month
+    @State private var zoomedDay: ZoomedDayPresentation?
     @State private var showsPaletteShiftEditor = false
     @State private var paletteEditingShiftType: ShiftTypeDefinition?
+    @State private var shareFile: ShareableExportFile?
+    @State private var exportErrorMessage: String?
+
+    @AppStorage(AppPreferenceKeys.showsYearCalendarLegend)
+    private var showsYearCalendarLegend = true
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -29,41 +38,49 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color(.systemGroupedBackground))
 
-            if showsOptionsMenu, rootScreen == .calendar {
-                Color.black.opacity(0.001)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        withAnimation(.snappy) {
-                            showsOptionsMenu = false
-                        }
+            if rootScreen == .calendar {
+                if showsShareMenu {
+                    dismissMenusOverlay {
+                        withAnimation(.snappy) { showsShareMenu = false }
                     }
 
-                SettingsOptionsMenu(
-                    onSelectCalendars: {
-                        withAnimation(.snappy) {
-                            showsOptionsMenu = false
-                            rootScreen = .calendars
-                        }
-                    },
-                    onSelectShiftTypes: {
-                        withAnimation(.snappy) {
-                            showsOptionsMenu = false
-                            rootScreen = .shiftTypes
-                        }
-                    },
-                    onSelectSettings: {
-                        withAnimation(.snappy) {
-                            showsOptionsMenu = false
-                            rootScreen = .settings
-                        }
+                    ShareOptionsMenu(onExportCalendar: exportSelectedCalendar)
+                        .padding(.top, 56)
+                        .padding(.trailing, 56)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                } else if showsOptionsMenu {
+                    dismissMenusOverlay {
+                        withAnimation(.snappy) { showsOptionsMenu = false }
                     }
-                )
-                .padding(.top, 56)
-                .padding(.trailing, 12)
-                .transition(.move(edge: .top).combined(with: .opacity))
+
+                    SettingsOptionsMenu(
+                        onSelectCalendars: {
+                            withAnimation(.snappy) {
+                                closeMenus()
+                                rootScreen = .calendars
+                            }
+                        },
+                        onSelectShiftTypes: {
+                            withAnimation(.snappy) {
+                                closeMenus()
+                                rootScreen = .shiftTypes
+                            }
+                        },
+                        onSelectSettings: {
+                            withAnimation(.snappy) {
+                                closeMenus()
+                                rootScreen = .settings
+                            }
+                        }
+                    )
+                    .padding(.top, 56)
+                    .padding(.trailing, 12)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
             }
         }
         .animation(.snappy(duration: 0.25), value: showsOptionsMenu)
+        .animation(.snappy(duration: 0.25), value: showsShareMenu)
         .sheet(isPresented: $showsCalendarPicker) {
             CalendarPickerSheet()
         }
@@ -71,6 +88,55 @@ struct ContentView: View {
             ShiftTypeEditorSheet(shiftType: paletteEditingShiftType) { definition in
                 shiftTypeStore.updateShiftType(definition)
             }
+        }
+        .sheet(item: $shareFile) { file in
+            ActivityShareSheet(items: [file.url])
+        }
+        .alert("No se pudo exportar", isPresented: exportErrorPresented) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(exportErrorMessage ?? "Error desconocido")
+        }
+        .onAppear {
+            calendarStore.linkAllShiftTypesIfEmpty(shiftTypeStore.shiftTypes.map(\.id))
+        }
+    }
+
+    private var exportErrorPresented: Binding<Bool> {
+        Binding(
+            get: { exportErrorMessage != nil },
+            set: { if !$0 { exportErrorMessage = nil } }
+        )
+    }
+
+    private func dismissMenusOverlay(onTap: @escaping () -> Void) -> some View {
+        Color.black.opacity(0.001)
+            .ignoresSafeArea()
+            .onTapGesture(perform: onTap)
+    }
+
+    private func closeMenus() {
+        showsOptionsMenu = false
+        showsShareMenu = false
+    }
+
+    private func exportSelectedCalendar() {
+        withAnimation(.snappy) {
+            showsShareMenu = false
+        }
+
+        let calendar = calendarStore.selectedCalendar
+        let export = CalendarExportService.buildExport(
+            calendar: calendar,
+            shiftTypes: shiftTypeStore.shiftTypes,
+            assignments: shiftStore.assignments(for: calendar.id)
+        )
+
+        do {
+            let url = try CalendarExportService.writeTemporaryFile(for: export)
+            shareFile = ShareableExportFile(url: url)
+        } catch {
+            exportErrorMessage = error.localizedDescription
         }
     }
 
@@ -100,22 +166,85 @@ struct ContentView: View {
                 calendarName: calendarStore.selectedCalendar.name,
                 headerColor: calendarStore.selectedCalendar.color,
                 onPickCalendar: { showsCalendarPicker = true },
-                onShare: { /* próximamente */ },
+                onShare: {
+                    withAnimation(.snappy) {
+                        showsOptionsMenu = false
+                        showsShareMenu.toggle()
+                    }
+                },
                 onSettings: {
                     withAnimation(.snappy) {
+                        showsShareMenu = false
                         showsOptionsMenu.toggle()
                     }
                 }
             )
 
-            CalendarsView(selectedAction: $selectedDayAction)
+            CalendarsView(
+                selectedAction: $selectedDayAction,
+                surfaceMode: $calendarSurfaceMode,
+                onDayZoom: { date in
+                    zoomedDay = ZoomedDayPresentation(date: date)
+                }
+            )
+            .layoutPriority(1)
 
-            CalendarShiftPaletteView(selectedAction: $selectedDayAction) { shiftType in
-                paletteEditingShiftType = shiftType
-                showsPaletteShiftEditor = true
+            calendarBottomBar
+        }
+        .onChange(of: calendarStore.selectedCalendarID) { _, _ in
+            selectedDayAction = .none
+        }
+        .onChange(of: calendarSurfaceMode) { _, newMode in
+            if newMode == .year {
+                selectedDayAction = .none
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(calendarSurfaceMode == .year ? Color.white : Color(.systemGroupedBackground))
+        .sheet(item: $zoomedDay) { item in
+            CalendarYearDayZoomSheet(date: item.date)
+        }
+    }
+
+    @ViewBuilder
+    private var calendarBottomBar: some View {
+        switch calendarSurfaceMode {
+        case .year:
+            if showsYearCalendarLegend {
+                CalendarYearLegendFooter()
+                    .layoutPriority(0)
+            }
+        case .month:
+            if calendarStore.selectedCalendar.isImported {
+                importedCalendarFooter
+            } else {
+                CalendarShiftPaletteView(selectedAction: $selectedDayAction) { shiftType in
+                    paletteEditingShiftType = shiftType
+                    showsPaletteShiftEditor = true
+                }
             }
         }
     }
+
+    private var importedCalendarFooter: some View {
+        Text("Calendario importado: solo lectura en los días. Edita nombre y abreviaturas desde Calendarios.")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background {
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .shadow(color: .black.opacity(0.06), radius: 8, y: -2)
+            }
+    }
+}
+
+private struct ShareableExportFile: Identifiable {
+    let id = UUID()
+    let url: URL
 }
 
 #Preview {
