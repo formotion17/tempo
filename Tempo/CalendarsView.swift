@@ -7,9 +7,11 @@ import SwiftUI
 
 struct CalendarsView: View {
     @Environment(WorkCalendarStore.self) private var calendarStore
+    @Environment(ShiftStore.self) private var shiftStore
 
     @Binding var selectedAction: CalendarDayAction
     @Binding var surfaceMode: CalendarSurfaceMode
+    @Binding var summaryYear: Int
     var onDayZoom: (Date) -> Void
 
     private var calendar: Calendar { Calendar.current }
@@ -74,6 +76,18 @@ struct CalendarsView: View {
         .background(surfaceMode == .year ? Color.white : Color.clear)
         .onAppear {
             syncYearFromMonth()
+            publishSummaryYear()
+        }
+        .onChange(of: displayedMonth) { _, _ in publishSummaryYear() }
+        .onChange(of: displayedYear) { _, _ in publishSummaryYear() }
+        .onChange(of: surfaceMode) { _, _ in publishSummaryYear() }
+    }
+
+    private func publishSummaryYear() {
+        if surfaceMode == .year {
+            summaryYear = displayedYear
+        } else {
+            summaryYear = calendar.component(.year, from: displayedMonth)
         }
     }
 
@@ -139,6 +153,10 @@ struct CalendarsView: View {
 
             Spacer(minLength: 0)
 
+            if surfaceMode == .month, !calendarStore.selectedCalendar.isImported {
+                undoButton
+            }
+
             Button {
                 withAnimation(.snappy) {
                     if surfaceMode == .month {
@@ -188,6 +206,31 @@ struct CalendarsView: View {
             }
         }
         .animation(.snappy, value: displayedMonth)
+    }
+
+    private var undoButton: some View {
+        let calendarID = calendarStore.selectedCalendarID
+        let canUndo = shiftStore.canUndo(calendarID: calendarID)
+        let steps = shiftStore.pendingUndoSteps(calendarID: calendarID)
+
+        return Button {
+            withAnimation(.snappy) {
+                shiftStore.undo(calendarID: calendarID)
+            }
+        } label: {
+            Image(systemName: "arrow.uturn.backward")
+                .font(.caption.weight(.bold))
+                .frame(width: 32, height: 32)
+                .foregroundStyle(canUndo ? Color.accentColor : .secondary)
+        }
+        .buttonStyle(.plain)
+        .disabled(!canUndo)
+        .accessibilityLabel("Deshacer")
+        .accessibilityHint(
+            canUndo
+                ? "Revierte el último cambio. \(steps) paso(s) disponibles."
+                : "No hay cambios que deshacer."
+        )
     }
 
     private func monthStepButton(offset: Int, label: String, systemImage: String) -> some View {
@@ -250,7 +293,7 @@ struct CalendarsView: View {
 #Preview {
     @Previewable @State var action: CalendarDayAction = .none
     @Previewable @State var mode: CalendarSurfaceMode = .year
-    CalendarsView(selectedAction: $action, surfaceMode: $mode, onDayZoom: { _ in })
+    CalendarsView(selectedAction: $action, surfaceMode: $mode, summaryYear: .constant(2026), onDayZoom: { _ in })
         .environment(ShiftStore())
         .environment(ShiftTypeStore())
         .environment(WorkCalendarStore())

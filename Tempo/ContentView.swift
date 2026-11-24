@@ -28,9 +28,14 @@ struct ContentView: View {
     @State private var paletteEditingShiftType: ShiftTypeDefinition?
     @State private var shareFile: ShareableExportFile?
     @State private var exportErrorMessage: String?
+    @State private var databaseExportReview: TempoDatabaseExportFile?
+    @State private var calendarExportRequest: CalendarExportSheetItem?
 
     @AppStorage(AppPreferenceKeys.showsYearCalendarLegend)
     private var showsYearCalendarLegend = true
+
+    @State private var summaryYear = MonthCalendarLogic.currentYear()
+    @State private var showsYearSummary = false
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -44,7 +49,10 @@ struct ContentView: View {
                         withAnimation(.snappy) { showsShareMenu = false }
                     }
 
-                    ShareOptionsMenu(onExportCalendar: exportSelectedCalendar)
+                    ShareOptionsMenu(
+                        onExportCalendar: prepareExportSelectedCalendar,
+                        onExportDatabase: prepareExportDatabase
+                    )
                         .padding(.top, 56)
                         .padding(.trailing, 56)
                         .transition(.move(edge: .top).combined(with: .opacity))
@@ -92,6 +100,19 @@ struct ContentView: View {
         .sheet(item: $shareFile) { file in
             ActivityShareSheet(items: [file.url])
         }
+        .sheet(isPresented: $showsYearSummary) {
+            CalendarYearSummarySheet(year: summaryYear)
+        }
+        .sheet(item: $databaseExportReview) { export in
+            TempoExportReviewView(export: export) {
+                confirmExport(.database(export))
+            }
+        }
+        .sheet(item: $calendarExportRequest) { request in
+            TempoCalendarExportReviewView(calendarID: request.calendarID) { export in
+                confirmExport(.calendar(export))
+            }
+        }
         .alert("No se pudo exportar", isPresented: exportErrorPresented) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -120,20 +141,31 @@ struct ContentView: View {
         showsShareMenu = false
     }
 
-    private func exportSelectedCalendar() {
+    private func prepareExportSelectedCalendar() {
         withAnimation(.snappy) {
             showsShareMenu = false
         }
 
-        let calendar = calendarStore.selectedCalendar
-        let export = CalendarExportService.buildExport(
-            calendar: calendar,
-            shiftTypes: shiftTypeStore.shiftTypes,
-            assignments: shiftStore.assignments(for: calendar.id)
-        )
+        calendarExportRequest = CalendarExportSheetItem(calendarID: calendarStore.selectedCalendarID)
+    }
 
+    private func prepareExportDatabase() {
+        withAnimation(.snappy) {
+            showsShareMenu = false
+        }
+
+        let export = CalendarExportService.buildDatabaseExport(
+            shiftTypes: shiftTypeStore.shiftTypes,
+            calendars: calendarStore.calendars,
+            selectedCalendarID: calendarStore.selectedCalendarID,
+            shiftStore: shiftStore
+        )
+        databaseExportReview = export
+    }
+
+    private func confirmExport(_ payload: TempoExportPayload) {
         do {
-            let url = try CalendarExportService.writeTemporaryFile(for: export)
+            let url = try CalendarExportService.writeTemporaryFile(for: payload)
             shareFile = ShareableExportFile(url: url)
         } catch {
             exportErrorMessage = error.localizedDescription
@@ -166,6 +198,12 @@ struct ContentView: View {
                 calendarName: calendarStore.selectedCalendar.name,
                 headerColor: calendarStore.selectedCalendar.color,
                 onPickCalendar: { showsCalendarPicker = true },
+                onSummary: {
+                    withAnimation(.snappy) {
+                        closeMenus()
+                        showsYearSummary = true
+                    }
+                },
                 onShare: {
                     withAnimation(.snappy) {
                         showsOptionsMenu = false
@@ -183,6 +221,7 @@ struct ContentView: View {
             CalendarsView(
                 selectedAction: $selectedDayAction,
                 surfaceMode: $calendarSurfaceMode,
+                summaryYear: $summaryYear,
                 onDayZoom: { date in
                     zoomedDay = ZoomedDayPresentation(date: date)
                 }
@@ -240,6 +279,11 @@ struct ContentView: View {
                     .shadow(color: .black.opacity(0.06), radius: 8, y: -2)
             }
     }
+}
+
+private struct CalendarExportSheetItem: Identifiable {
+    let calendarID: UUID
+    var id: UUID { calendarID }
 }
 
 private struct ShareableExportFile: Identifiable {

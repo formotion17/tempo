@@ -205,6 +205,17 @@ final class WorkCalendarStore {
         persist()
     }
 
+    func replaceAll(calendars: [WorkCalendar], selectedCalendarID: UUID) {
+        guard !calendars.isEmpty else { return }
+        self.calendars = calendars
+        if calendars.contains(where: { $0.id == selectedCalendarID }) {
+            self.selectedCalendarID = selectedCalendarID
+        } else {
+            self.selectedCalendarID = calendars[0].id
+        }
+        persist()
+    }
+
     func calendarNameBinding(for id: UUID) -> Binding<String> {
         Binding(
             get: {

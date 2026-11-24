@@ -69,13 +69,7 @@ struct CalendarYearDayZoomSheet: View {
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.body.weight(.semibold))
-                    }
-                    .accessibilityLabel("Cerrar")
+                    TempoSheetToolbar.dismissButton { dismiss() }
                 }
             }
         }

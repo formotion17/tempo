@@ -23,7 +23,7 @@ struct CalendarsManagementView: View {
     @State private var showsDeleteConfirmation = false
     @State private var showsAddMenu = false
     @State private var showsFileImporter = false
-    @State private var importReview: TempoCalendarExportFile?
+    @State private var importReview: TempoImportPayload?
     @State private var importErrorMessage: String?
 
     var body: some View {
@@ -89,8 +89,8 @@ struct CalendarsManagementView: View {
         ) { result in
             handleImportFile(result)
         }
-        .sheet(item: $importReview) { export in
-            CalendarImportReviewView(export: export, onImported: {})
+        .sheet(item: $importReview) { payload in
+            TempoImportReviewView(payload: payload, onImported: {})
         }
         .alert("No se pudo importar", isPresented: importErrorPresented) {
             Button("OK", role: .cancel) {}
@@ -130,8 +130,8 @@ struct CalendarsManagementView: View {
                 return
             }
             do {
-                let export = try CalendarImportService.decode(from: url)
-                importReview = export
+                let payload = try CalendarImportService.decodePayload(from: url)
+                importReview = payload
             } catch {
                 importErrorMessage = error.localizedDescription
             }
@@ -253,10 +253,6 @@ struct CalendarsManagementView: View {
                 .fill(Color(.secondarySystemGroupedBackground))
         }
     }
-}
-
-extension TempoCalendarExportFile: Identifiable {
-    var id: String { calendar.id.uuidString + exportedAt.ISO8601Format() }
 }
 
 #Preview {

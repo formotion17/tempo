@@ -9,6 +9,7 @@ struct CalendarScreenToolbar: View {
     let calendarName: String
     let headerColor: Color
     let onPickCalendar: () -> Void
+    let onSummary: () -> Void
     let onShare: () -> Void
     let onSettings: () -> Void
 
@@ -48,6 +49,20 @@ struct CalendarScreenToolbar: View {
 
             Spacer(minLength: 0)
 
+            Button(action: onSummary) {
+                Text("Resumen")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(foreground)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background {
+                        Capsule()
+                            .fill(pillBackground)
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Resumen del año")
+
             Button(action: onShare) {
                 Image(systemName: "square.and.arrow.up")
                     .font(.body.weight(.semibold))
@@ -83,6 +98,7 @@ struct CalendarScreenToolbar: View {
         calendarName: "Principal",
         headerColor: Color(hex: "#C6E7FF") ?? .blue.opacity(0.3),
         onPickCalendar: {},
+        onSummary: {},
         onShare: {},
         onSettings: {}
     )

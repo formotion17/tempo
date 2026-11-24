@@ -108,13 +108,10 @@ struct CalendarEditorSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") { dismiss() }
+                    TempoSheetToolbar.dismissButton { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Guardar") {
-                        save()
-                    }
-                    .disabled(!canSave)
+                    TempoSheetToolbar.saveButton(disabled: !canSave) { save() }
                 }
             }
             .onAppear {
@@ -154,7 +151,7 @@ struct CalendarEditorSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cerrar") { showsOverlaySourcePicker = false }
+                    TempoSheetToolbar.dismissButton { showsOverlaySourcePicker = false }
                 }
             }
         }

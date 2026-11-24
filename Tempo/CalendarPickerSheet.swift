@@ -42,7 +42,7 @@ struct CalendarPickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cerrar") { dismiss() }
+                    TempoSheetToolbar.dismissButton { dismiss() }
                 }
             }
         }

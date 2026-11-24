@@ -88,10 +88,10 @@ struct ShiftTypeEditorSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") { dismiss() }
+                    TempoSheetToolbar.dismissButton { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Guardar") {
+                    TempoSheetToolbar.saveButton(disabled: !canSave) {
                         let definition = ShiftTypeDefinition(
                             id: existingID ?? UUID(),
                             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -102,7 +102,6 @@ struct ShiftTypeEditorSheet: View {
                         onSave(definition)
                         dismiss()
                     }
-                    .disabled(!canSave)
                 }
             }
         }

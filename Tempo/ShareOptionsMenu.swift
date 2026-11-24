@@ -7,10 +7,12 @@ import SwiftUI
 
 struct ShareOptionsMenu: View {
     let onExportCalendar: () -> Void
+    let onExportDatabase: () -> Void
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 10) {
-            menuBubble(title: "Exportar calendario", icon: "square.and.arrow.up", action: onExportCalendar)
+            menuBubble(title: "Exportar calendario", icon: "calendar", action: onExportCalendar)
+            menuBubble(title: "Exportar base de datos", icon: "square.and.arrow.up", action: onExportDatabase)
         }
     }
 
@@ -40,6 +42,6 @@ struct ShareOptionsMenu: View {
 }
 
 #Preview {
-    ShareOptionsMenu(onExportCalendar: {})
+    ShareOptionsMenu(onExportCalendar: {}, onExportDatabase: {})
         .padding()
 }

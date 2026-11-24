@@ -116,6 +116,11 @@ final class ShiftTypeStore {
         persist()
     }
 
+    func replaceAll(with shiftTypes: [ShiftTypeDefinition]) {
+        self.shiftTypes = shiftTypes
+        persist()
+    }
+
     private func persist() {
         AppPersistence.saveShiftTypes(shiftTypes)
     }
